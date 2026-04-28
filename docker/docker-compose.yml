@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  nextjs:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: getchatpilot_nextjs
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/getchatpilot
+      - REDIS_URL=redis://redis:6379
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=https://getchatpilot.com
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - EVOLUTION_API_URL=http://evolution:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - PUSHER_APP_ID=${PUSHER_APP_ID}
+      - PUSHER_KEY=${PUSHER_KEY}
+      - PUSHER_SECRET=${PUSHER_SECRET}
+      - PUSHER_CLUSTER=${PUSHER_CLUSTER}
+      - NEXT_PUBLIC_PUSHER_KEY=${PUSHER_KEY}
+      - NEXT_PUBLIC_PUSHER_CLUSTER=${PUSHER_CLUSTER}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - getchatpilot
+    volumes:
+      - nextjs_data:/app/.next
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: getchatpilot_postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=getchatpilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - getchatpilot
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: getchatpilot_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - getchatpilot
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: getchatpilot_evolution
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_TYPE=HTTP
+      - SERVER_PORT=8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@postgres:5432/evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_CONTACT=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_MESSAGES=true
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_URL=${WEBHOOK_URL}/api/webhooks/evolution
+      - CONFIG_SESSION_PHONE_CLIENT=GetChatPilot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - getchatpilot
+    restart: unless-stopped
+    volumes:
+      - evolution_media:/evolution/instances
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/getchatpilot/data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/getchatpilot/data/redis
+  evolution_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/getchatpilot/data/evolution
+  nextjs_data:
+
+networks:
+  getchatpilot:
+    driver: bridge
