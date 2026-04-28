@@ -134,6 +134,7 @@ model Instance {
   contacts       Contact[]
   messageLogs    MessageLog[]
   chats          Chat[]
+  campaigns      Campaign[]
 }
 
 model Contact {
